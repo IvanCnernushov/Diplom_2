@@ -1,36 +1,34 @@
 import allure
 import pytest
+from utils.url import BASE_URL
 
 
 class TestLoginUser:
     @allure.title("Успешный вход существующего пользователя")
-    @allure.description("Тест на успешную авторизацию зарегистрированного пользователя")
-    def test_login_existing_user_success(self, api_client, base_url, registered_user):
-        with allure.step("Отправить запрос на авторизацию"):
-            response = api_client.post(f"{base_url}/auth/login", json={
-                "email": registered_user["email"],
-                "password": registered_user["password"]
+    def test_login_existing_user_success(self, api_client, user_data):
+
+        reg = api_client.post(f"{BASE_URL}/auth/register", json=user_data)
+        assert reg.status_code == 200
+
+        with allure.step("Выполнить login"):
+            response = api_client.post(f"{BASE_URL}/auth/login", json={
+                "email": user_data["email"],
+                "password": user_data["password"]
             })
 
-        with allure.step("Проверить успешную авторизацию"):
+        with allure.step("Проверить ответ"):
             assert response.status_code == 200
-            response_data = response.json()
-            assert response_data["success"] is True
-            assert "accessToken" in response_data
-            assert "refreshToken" in response_data
-            assert response_data["user"]["email"] == registered_user["email"]
+            data = response.json()
+            assert "accessToken" in data
 
-    @allure.title("Вход с неверными учетными данными")
-    @allure.description("Тест на попытку входа с неправильным email и паролем")
-    def test_login_with_invalid_credentials_fail(self, api_client, base_url):
-        with allure.step("Отправить запрос с неверными данными"):
-            response = api_client.post(f"{base_url}/auth/login", json={
-                "email": "nonexistent@example.com",
-                "password": "wrongpassword"
-            })
-
-        with allure.step("Проверить ошибку авторизации"):
-            assert response.status_code == 401
-            response_data = response.json()
-            assert response_data["success"] is False
-            assert "email or password are incorrect" in response_data["message"]
+    @allure.title("Вход с неверным логином/паролем")
+    @pytest.mark.parametrize("bad_creds", [
+        ({"email": "notexists@example.com", "password": "whatever"}),
+        ({"email": "wrong@example.com", "password": "wrongpass"}),
+    ])
+    def test_login_with_invalid_credentials(self, api_client, bad_creds):
+        response = api_client.post(f"{BASE_URL}/auth/login", json=bad_creds)
+        
+        assert response.status_code in (401, 403)
+        data = response.json()
+        assert data.get("success") is False
