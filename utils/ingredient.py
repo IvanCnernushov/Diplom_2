@@ -2,3 +2,4 @@ INGREDIENT_IDS = [
     "61c0c5a71d1f82001bdaaa6d",
     "61c0c5a71d1f82001bdaaa6f",
 ]
+INVALID_INGREDIENT_HASH = ["invalid1", "not-a-real-id"]

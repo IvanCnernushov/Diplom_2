@@ -1,7 +1,8 @@
 ﻿import pytest
 import requests
-from utils.helpers import generate_unique_email, generate_invalid_ingredient_hash
-from utils.url import BASE_URL
+from utils.helpers import generate_unique_email
+from utils.url import BASE_URL, REGISTER, LOGIN, USER, INGREDIENTS
+
 
 @pytest.fixture
 def api_client():
@@ -20,54 +21,52 @@ def user_data():
 
 
 @pytest.fixture
-def registered_user(api_client, user_data):
-    resp = api_client.post(f"{BASE_URL}/auth/register", json=user_data)
-    access_token = None
-    try:
-        if resp.status_code == 200:
-            data = resp.json()
-            access_token = data.get("accessToken")
-    except Exception:
-        access_token = None
-    yield user_data
-    token = access_token
-    if not token:
-       
-        try:
-            login_resp = api_client.post(f"{BASE_URL}/auth/login", json={
-                "email": user_data["email"],
-                "password": user_data["password"]
-            })
-            if login_resp.status_code == 200:
-                token = login_resp.json().get("accessToken")
-        except Exception:
-            token = None
-    if token:
-    
-        headers = {"Authorization": token}
-        try:
-            api_client.delete(f"{BASE_URL}/auth/user", headers=headers)
-        except Exception:
-            pass
+def create_user(api_client):
+    def _create(payload):
+        return api_client.post(BASE_URL + REGISTER, json=payload)
+    return _create
 
 
 @pytest.fixture
-def auth_token(api_client, registered_user):
-    resp = api_client.post(f"{BASE_URL}/auth/login", json={
-        "email": registered_user["email"],
-        "password": registered_user["password"]
-    })
+def login_user(api_client):
+    def _login(email, password):
+        return api_client.post(
+            BASE_URL + LOGIN,
+            json={"email": email, "password": password}
+        )
+    return _login
 
-    if resp.status_code != 200:
-        raise RuntimeError(f"Login failed in auth_token fixture: status {resp.status_code}")
 
-    token_data = resp.json()
-    token = token_data.get("accessToken")
-    if not token:
-        raise RuntimeError("No accessToken returned in auth_token fixture")
+@pytest.fixture
+def registered_user(create_user, login_user, api_client, user_data):
 
+    create_user(user_data)
+    login_response = login_user(user_data["email"], user_data["password"])
+    token = login_response.json().get("accessToken")
+
+    yield {
+        "email": user_data["email"],
+        "password": user_data["password"],
+        "token": token,
+        "data": user_data
+    }
+
+    if token:
+        api_client.delete(
+            BASE_URL + USER,
+            headers={"Authorization": token}
+        )
+
+
+@pytest.fixture
+def auth_token(login_user, registered_user):
+    token = registered_user.get("token")
     return token
 
+
 @pytest.fixture
-def invalid_ingredient_hash():
-    return ["invalid1", "not-a-real-id"]
+def ingredients(api_client):
+    resp = api_client.get(BASE_URL + INGREDIENTS)
+    data = resp.json().get("data", [])
+    return [data[0]["_id"], data[1]["_id"]]
+

@@ -1,34 +1,31 @@
 import allure
 import pytest
-from utils.url import BASE_URL
+from utils.url import BASE_URL, REGISTER, LOGIN
 
 
 class TestLoginUser:
+
     @allure.title("Успешный вход существующего пользователя")
-    def test_login_existing_user_success(self, api_client, user_data):
+    def test_login_existing_user_success(self, api_client, registered_user):
+  
+        data = registered_user["data"]
 
-        reg = api_client.post(f"{BASE_URL}/auth/register", json=user_data)
-        assert reg.status_code == 200
+        response = api_client.post(
+            BASE_URL + LOGIN,
+            json={"email": data["email"], "password": data["password"]}
+        )
 
-        with allure.step("Выполнить login"):
-            response = api_client.post(f"{BASE_URL}/auth/login", json={
-                "email": user_data["email"],
-                "password": user_data["password"]
-            })
-
-        with allure.step("Проверить ответ"):
-            assert response.status_code == 200
-            data = response.json()
-            assert "accessToken" in data
+        assert response.status_code == 200
+        assert "accessToken" in response.json()
 
     @allure.title("Вход с неверным логином/паролем")
     @pytest.mark.parametrize("bad_creds", [
-        ({"email": "notexists@example.com", "password": "whatever"}),
-        ({"email": "wrong@example.com", "password": "wrongpass"}),
+        {"email": "notexists@example.com", "password": "whatever"},
+        {"email": "wrong@example.com", "password": "wrongpass"},
     ])
     def test_login_with_invalid_credentials(self, api_client, bad_creds):
-        response = api_client.post(f"{BASE_URL}/auth/login", json=bad_creds)
-        
-        assert response.status_code in (401, 403)
-        data = response.json()
-        assert data.get("success") is False
+
+        response = api_client.post(BASE_URL + LOGIN, json=bad_creds)
+
+        assert response.status_code == 401
+        assert response.json()["message"] == "email or password are incorrect"
